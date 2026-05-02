@@ -1,1 +1,262 @@
-<h1>Masterone Server Online</h1><p>Desplegado desde Debian en mi movil.</p>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EVA-01 | SISTEMA DE TRAZABILIDAD</title>
+    <style>
+        :root {
+            --eva-purple: #4b0082;
+            --eva-neon: #a7ff00;
+            --eva-red: #d10000;
+            --bg-dark: #0a0a0a;
+            --row-bg: #141414;
+        }
+
+        body {
+            background: var(--bg-dark); color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0; padding: 15px; display: flex; justify-content: center;
+        }
+
+        .container {
+            width: 100%; max-width: 1200px;
+            background: rgba(20, 20, 20, 0.95);
+            border: 2px solid var(--eva-purple);
+            padding: 20px; border-radius: 10px;
+            box-shadow: 0 0 30px rgba(75,0,130,0.4);
+        }
+
+        h2 { text-align: center; color: var(--eva-neon); text-transform: uppercase; margin-top: 0; border-bottom: 2px solid #333; padding-bottom: 10px; }
+
+        .layout {
+            display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px;
+        }
+
+        @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+        /* PANEL DE RENGLONES */
+        .input-panel {
+            background: #000; border: 1px solid #333;
+            padding: 15px; border-radius: 5px;
+            max-height: 500px; overflow-y: auto;
+        }
+
+        .row {
+            display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;
+            background: var(--row-bg); padding: 10px; border-radius: 5px;
+            border-left: 4px solid #444; align-items: center; transition: 0.3s;
+        }
+
+        .row.error { border-left-color: var(--eva-red); background: rgba(209, 0, 0, 0.1); }
+        .row.success { border-left-color: var(--eva-neon); background: rgba(167, 255, 0, 0.05); }
+
+        .row-num { font-weight: bold; color: #666; width: 25px; }
+        
+        input[type="text"] {
+            flex: 2; min-width: 100px; padding: 8px;
+            background: #111; color: #fff; border: 1px solid #444; border-radius: 3px;
+        }
+        
+        select {
+            flex: 1; min-width: 65px; padding: 8px;
+            background: #111; color: var(--eva-neon); border: 1px solid #444; border-radius: 3px;
+            cursor: pointer; outline: none;
+        }
+
+        .btn-sync {
+            width: 100%; padding: 15px; background: var(--eva-purple);
+            color: white; border: none; font-weight: bold; font-size: 1.1rem;
+            cursor: pointer; text-transform: uppercase; margin-top: 15px; border-radius: 5px;
+        }
+        .btn-sync:hover { background: #6a11cb; box-shadow: 0 0 15px var(--eva-purple); }
+
+        /* DASHBOARD (RESULTADOS) */
+        .dashboard { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+            gap: 15px; 
+            align-content: start;
+        }
+
+        .list-box {
+            background: rgba(0,0,0,0.6); border: 1px solid var(--eva-purple);
+            border-radius: 5px; padding: 10px; min-height: 250px;
+        }
+
+        .list-box.box-error { border-color: var(--eva-red); background: rgba(50, 0, 0, 0.3); }
+
+        h4 { margin: 0 0 10px 0; text-align: center; color: #fff; background: rgba(75,0,130,0.5); padding: 5px; font-size: 0.9rem;}
+        .box-error h4 { background: var(--eva-red); }
+
+        .result-item {
+            background: #1a1a1a; padding: 8px; margin-bottom: 5px; font-size: 0.85rem;
+            border-left: 3px solid var(--eva-neon); display: flex; justify-content: space-between;
+        }
+
+        /* ESTILO PARA LOS MENSAJES DE ERROR EN EL TERCER CUADRO */
+        .error-item {
+            background: rgba(0,0,0,0.8); border: 1px solid var(--eva-red);
+            padding: 8px; margin-bottom: 8px; border-radius: 3px; font-size: 0.85rem;
+        }
+        .err-title { color: var(--eva-red); font-weight: bold; margin-bottom: 3px; border-bottom: 1px solid #444; padding-bottom: 2px;}
+        .err-hint { color: #ccc; font-style: italic; font-size: 0.75rem; margin-top: 3px;}
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>PANEL DE CONTROL <span style="color:var(--eva-purple)">EVA-01</span></h2>
+    
+    <div class="layout">
+        <div>
+            <div style="font-size: 0.8rem; margin-bottom: 5px; color: #aaa;">REGISTRO DE SUJETOS (MÁX 20)</div>
+            <div class="input-panel" id="rows-container">
+                </div>
+            <button class="btn-sync" onclick="syncData()">SINCRONIZAR DATOS</button>
+        </div>
+
+        <div class="dashboard">
+            <div class="list-box">
+                <h4>ADULTOS</h4>
+                <div id="listAdults"></div>
+            </div>
+            <div class="list-box">
+                <h4>MENORES</h4>
+                <div id="listMinors"></div>
+            </div>
+            <div class="list-box box-error">
+                <h4>REGISTROS ERRÓNEOS</h4>
+                <div id="listErrors"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const MAX_ROWS = 20;
+    const currentYear = new Date().getFullYear();
+    const months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+    function initRows() {
+        const container = document.getElementById('rows-container');
+        let html = '';
+
+        let dayOpts = '<option value="">Día</option>';
+        for(let i=1; i<=31; i++) dayOpts += `<option value="${i}">${i}</option>`;
+        
+        let monthOpts = '<option value="">Mes</option>';
+        months.forEach((m, i) => monthOpts += `<option value="${i}">${m}</option>`);
+
+        let yearOpts = '<option value="">Año</option>';
+        for(let i=currentYear; i>=1920; i--) yearOpts += `<option value="${i}">${i}</option>`;
+
+        for(let i=1; i<=MAX_ROWS; i++) {
+            const num = i < 10 ? '0'+i : i;
+            html += `
+            <div class="row" id="row-${i}">
+                <div class="row-num">${num}</div>
+                <input type="text" id="name-${i}" placeholder="Nombre del sujeto">
+                <select id="day-${i}">${dayOpts}</select>
+                <select id="month-${i}">${monthOpts}</select>
+                <select id="year-${i}">${yearOpts}</select>
+            </div>`;
+        }
+        container.innerHTML = html;
+    }
+
+    function calculateAge(y, m, d) {
+        const birth = new Date(y, m, d);
+        const today = new Date();
+        if (birth.getFullYear() != y || birth.getMonth() != m || birth.getDate() != d) return null;
+        let age = today.getFullYear() - birth.getFullYear();
+        if (today.getMonth() < birth.getMonth() || (today.getMonth() == birth.getMonth() && today.getDate() < birth.getDate())) age--;
+        return (age >= 0 && age < 115) ? age : null;
+    }
+
+    function syncData() {
+        let adults = [];
+        let minors = [];
+        let errors = [];
+
+        for(let i=1; i<=MAX_ROWS; i++) {
+            const rowDiv = document.getElementById(`row-${i}`);
+            const name = document.getElementById(`name-${i}`).value.trim();
+            const d = document.getElementById(`day-${i}`).value;
+            const m = document.getElementById(`month-${i}`).value;
+            const y = document.getElementById(`year-${i}`).value;
+            const rowNum = i < 10 ? '0'+i : i;
+
+            rowDiv.className = "row"; 
+
+            if (!name && !d && !m && !y) continue; // Ignora renglones vacíos
+
+            // Validación 1: Faltan Datos
+            if (!name || !d || !m || !y) {
+                rowDiv.classList.add('error');
+                errors.push({
+                    listNum: rowNum,
+                    title: "Datos Incompletos",
+                    hint: "Asegúrate de llenar el Nombre y seleccionar Día, Mes y Año."
+                });
+                continue;
+            }
+
+            // Validación 2: Cálculo y Fecha Inexistente
+            const age = calculateAge(parseInt(y), parseInt(m), parseInt(d));
+
+            if (age === null) {
+                rowDiv.classList.add('error');
+                errors.push({
+                    listNum: rowNum,
+                    title: "Fecha Inexistente",
+                    hint: "Revisa el calendario. Es posible que el mes seleccionado no tenga tantos días."
+                });
+            } else {
+                rowDiv.classList.add('success');
+                const person = { name, age, date: `${d}/${parseInt(m)+1}/${y}` };
+                if (age >= 18) adults.push(person);
+                else minors.push(person);
+            }
+        }
+
+        renderList('listAdults', adults);
+        renderList('listMinors', minors);
+        renderErrors(errors);
+    }
+
+    function renderList(elementId, dataArray) {
+        const container = document.getElementById(elementId);
+        if (dataArray.length === 0) {
+            container.innerHTML = "<div style='color:#666; text-align:center; padding:10px;'>Sin registros</div>";
+            return;
+        }
+        container.innerHTML = dataArray.map(p => `
+            <div class="result-item">
+                <span><b>${p.name}</b></span>
+                <span style="color:var(--eva-neon)">${p.age} años</span>
+            </div>
+        `).join("");
+    }
+
+    function renderErrors(errArray) {
+        const container = document.getElementById('listErrors');
+        if (errArray.length === 0) {
+            container.innerHTML = "<div style='color:#666; text-align:center; padding:10px;'>Todo correcto</div>";
+            return;
+        }
+        container.innerHTML = errArray.map(err => `
+            <div class="error-item">
+                <div class="err-title">Renglón ${err.listNum}: ${err.title}</div>
+                <div class="err-hint">💡 ${err.hint}</div>
+            </div>
+        `).join("");
+    }
+
+    window.onload = initRows;
+</script>
+
+</body>
+</html>
+
